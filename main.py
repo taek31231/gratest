@@ -43,7 +43,7 @@ def update_animation(frame, fig, ax_orbit, ax_lightcurve,
     planet_y = R_ORBIT * np.sin(angle)
 
     # 행성 및 중심별 시각화 업데이트
-    planet_plot.set_data(planet_x, planet_y)
+    planet_plot.set_data([planet_x], [planet_y])
 
     # 관찰자 위치 및 시선 표시 (초기 각도 기준)
     observer_angle_rad = np.radians(observer_angle_deg)
