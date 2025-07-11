@@ -5,161 +5,181 @@ from plotly.subplots import make_subplots
 
 st.set_page_config(layout="wide")
 
-st.title("Plotly를 활용한 미세중력렌즈 시뮬레이션")
+st.title("미세중력렌즈 시뮬레이션")
 
 # --- 설정값 ---
 st.sidebar.header("시뮬레이션 설정")
 orbital_period = st.sidebar.slider("행성 공전 주기 (프레임 수)", 100, 500, 200, key="period_slider")
-planet_mass_ratio = st.sidebar.slider("행성-중심별 질량비 (중심별=1)", 0.001, 0.1, 0.01, format="%.3f", key="mass_ratio_slider")
+planet_mass_ratio = st.sidebar.slider("행성 질량비 (중심별=1)", 0.001, 0.1, 0.01, format="%.3f", key="mass_ratio_slider")
 observer_angle_deg = st.sidebar.slider("관찰자 초기 각도 (도)", 0, 360, 90, key="observer_angle_slider")
+st.sidebar.markdown("---")
+st.sidebar.info("💡 **팁:** 'Play' 버튼을 누르거나 아래 슬라이더를 움직여 애니메이션을 제어하세요.")
 
 # --- 시뮬레이션 상수 ---
-R_STAR = 1.0  # 중심별 반지름 (단위)
+R_STAR = 0.5  # 중심별 시각적 반지름 (단위)
 R_ORBIT = 5.0  # 행성 궤도 반지름 (단위)
+R_OBSERVER_DIST = 10.0 # 관찰자의 중심별로부터의 거리 (시각화용)
 
 # --- 미세중력렌즈 광도 계산 함수 (더 정교하게 구현 필요) ---
-def calculate_magnification(planet_pos, star_pos, observer_angle_rad, planet_mass_ratio):
-    # 이 함수는 실제 미세중력렌즈 배율 공식을 적용해야 합니다.
-    # 여기서는 단순화를 위해, 관찰자 시선과 중심별-행성 정렬 시 광도가 증가하도록 설정합니다.
+def calculate_magnification(planet_pos, observer_pos, star_pos, planet_mass_ratio):
+    # 이 함수는 미세중력렌즈의 배율(magnification) 공식을 적용해야 합니다.
+    # 여기서는 매우 단순화된 근사를 사용합니다.
+    # 실제 microlensing은 광원(source star), 렌즈(lens object, 행성), 관찰자(observer)의 정렬에 따라 결정됩니다.
+    # A = (u^2 + 2) / (u * sqrt(u^2 + 4)) where u = impact parameter / Einstein radius
 
-    # planet_pos: (x, y) 튜플
-    # star_pos: (0, 0)
-    # observer_angle_rad: 관찰자 시선 각도 (라디안)
+    # 여기서는 중심별(star_pos)이 '광원'이고 행성(planet_pos)이 '렌즈' 역할을 하며,
+    # 관찰자(observer_pos)가 이 효과를 보는 상황을 시뮬레이션합니다.
 
-    # 행성과 중심별 사이의 거리
-    distance_to_star = np.sqrt(planet_pos[0]**2 + planet_pos[1]**2)
+    # 1. 관찰자 시점에서 행성-중심별의 상대적 위치 (선형 근사)
+    # 관찰자-중심별 벡터
+    obs_to_star_vec = -np.array(observer_pos) # (0,0) - observer_pos
+    # 관찰자-행성 벡터
+    obs_to_planet_vec = np.array(planet_pos) - np.array(observer_pos)
 
-    # 행성의 중심별 기준 각도
-    planet_angle = np.arctan2(planet_pos[1], planet_pos[0])
-
-    # 관찰자 시선과 행성-중심별 정렬을 확인 (단순화된 방식)
-    # 관찰자 시선은 (cos(observer_angle_rad), sin(observer_angle_rad)) 방향
-    # 행성의 상대적인 위치를 관찰자 시선에 투영
-    # 예시: 행성이 관찰자 시선과 중심별 사이에 매우 가깝게 정렬될 때
+    # 중심별을 기준으로 한 행성의 상대적 위치 (관찰자 시선에 수직한 거리)
+    # 즉, 관찰자-중심별 라인에 대한 행성의 수직 거리
+    # 투영된 거리: d_perp = |obs_to_planet_vec X obs_to_star_vec_unit|
     
-    # 여기서부터 실제 미세중력렌즈 공식을 도입해야 합니다.
-    # UDM (Universal Deviation from the Mean) 모델의 단순화된 형태를 사용할 수 있습니다.
-    # 예를 들어, 아인슈타인 반경 내에 들어왔을 때 광도가 급증하는 형태
+    # 단순화를 위해, 관찰자 시점에서 행성과 중심별이 얼마나 정렬되어 있는지를 봅니다.
+    # 중심별과 행성 사이의 거리가 너무 멀면 렌즈 효과는 무시합니다.
+    
+    magnification = 1.0 # 기본 광도 (증폭 없음)
 
-    # Example: Simple alignment check
-    # 렌즈 중심(별)과 광원(배경별) 사이의 각 거리 'u'를 계산해야 함
-    # 여기서는 행성이 '렌즈' 역할을 하므로, 행성과 관찰자 시선과의 거리가 중요
-    
-    # 렌즈 (행성)와 광원 (중심별)의 시선 분리 각도
-    # (실제로는 배경별이 광원이고, 행성이 렌즈, 관찰자가 그 효과를 보는 것)
-    # 여기서는 중심별이 광원이고, 행성이 중심별을 가리키는 시선 주변을 통과할 때 광도 증가 가정.
-
-    magnification = 1.0 # 기본 광도
-
-    # 가정: 행성이 관찰자 시선에 거의 놓일 때 (즉, 행성-중심별-관찰자가 정렬될 때)
-    # 렌즈 효과의 정점은 관찰자-렌즈-소스가 완벽하게 정렬될 때 발생합니다.
-    # 여기서는 행성이 렌즈 역할을 하므로, 중심별과 관찰자 시선 사이의 '아인슈타인 반경' 영역을
-    # 행성이 통과할 때 광도 증가를 시뮬레이션합니다.
-
-    # 렌즈 (행성)가 광원 (중심별)과 관찰자 사이를 통과할 때의 시선 거리를 계산
-    # Simplified approach: If the planet is close to the observer's line of sight through the star
-    
-    # Calculate the angle between the planet's position vector and the observer's line of sight
-    planet_angle_from_observer = np.arctan2(planet_pos[1] - R_ORBIT*np.sin(observer_angle_rad)*0, planet_pos[0] - R_ORBIT*np.cos(observer_angle_rad)*0)
-    
-    # Approximation for alignment:
-    # If the planet passes very close to the star *from the observer's perspective*
-    # This is a very simplified model for micro-lensing, which requires more complex physics.
-    
-    # Let's use a simpler heuristic: when planet is 'in front' of the star relative to observer
-    # If the observer is at (R_OBS * cos(observer_angle), R_OBS * sin(observer_angle))
-    # And the star is at (0,0)
-    # The planet (planet_x, planet_y) is 'in front' if its projection on the observer-star line is between them
-    
-    # For a general microlensing event, magnification A = (u^2 + 2) / (u * sqrt(u^2 + 4))
-    # where u is the normalized source-lens separation (normalized by Einstein radius)
-    # u = d_proj / R_E (projected distance / Einstein radius)
-
-    # Simplified approach for animation: simulate a peak when the planet passes near the observer's direct line to the star
-    # Let's consider the x-axis as the observer's view when observer_angle_deg is 90 or 270 (y-axis view)
-    # Or, more generally, align with the observer's chosen direction
-    
-    # Angle between planet position and the observer's line of sight to the star
-    angle_diff = np.abs(planet_angle - observer_angle_rad)
-    
-    # Normalize to be between 0 and pi
-    if angle_diff > np.pi:
-        angle_diff = 2 * np.pi - angle_diff
-
-    # Simulate a peak when the angle difference is small and planet is near the star's apparent disk
-    threshold_angle = np.radians(10) # Within 10 degrees of alignment
-    
-    if angle_diff < threshold_angle:
-        # Distance from the star center to the point on the observer's line of sight that the planet crosses
-        # This is a simplified proxy for 'u' in microlensing, not physically rigorous
+    # 행성이 중심별에 가까이 있을 때만 렌즈 효과 고려
+    if np.linalg.norm(np.array(planet_pos)) < R_ORBIT * 1.5: # 행성이 궤도 근처에 있을 때
         
-        # Simulate a bump. The strength of the bump depends on planet_mass_ratio
-        magnification = 1.0 + planet_mass_ratio * (1 - (angle_diff / threshold_angle)**2) * 50 # Example scaling
-        magnification = max(1.0, magnification) # Ensure it doesn't go below 1
+        # 중심별과 행성 사이의 거리
+        dist_star_planet = np.linalg.norm(np.array(planet_pos) - np.array(star_pos))
+        
+        # 관찰자, 행성, 중심별의 정렬을 시뮬레이션
+        # 관찰자 -> 중심별 시선 벡터
+        line_of_sight_vec = np.array(star_pos) - np.array(observer_pos)
+        line_of_sight_unit = line_of_sight_vec / np.linalg.norm(line_of_sight_vec)
 
-    return magnification
+        # 행성의 위치에서 관찰자->중심별 시선까지의 수직 거리 (아인슈타인 반경의 'u'에 해당)
+        # 이 부분이 microlensing의 impact parameter (u)와 관련됩니다.
+        # u가 0에 가까울수록 증폭이 커집니다.
+        # 여기서는 단순히 행성에서 시선까지의 거리를 사용합니다.
+        
+        # 행성 위치 (x_p, y_p), 시선 위의 점 (x_s, y_s) (예: 중심별), 시선 벡터 (dx, dy)
+        # 점과 직선 사이의 거리 공식 응용
+        # line_of_sight_vec = (star_pos[0]-observer_pos[0], star_pos[1]-observer_pos[1])
+        # A = observer_pos[1] - star_pos[1]  (dy)
+        # B = star_pos[0] - observer_pos[0]  (-dx)
+        # C = -A*observer_pos[0] - B*observer_pos[1]
+        
+        # distance = |A*planet_pos[0] + B*planet_pos[1] + C| / sqrt(A^2 + B^2)
+
+        # Simplified u: distance from planet to observer's line of sight to star
+        # We need a point on the line of sight (e.g., star_pos) and direction vector (line_of_sight_vec)
+        # Project planet_pos onto line_of_sight_vec and find the perpendicular distance
+        
+        # Vector from observer to planet
+        vec_op = np.array(planet_pos) - np.array(observer_pos)
+        
+        # Dot product to find the component along the line of sight
+        proj_length = np.dot(vec_op, line_of_sight_unit)
+        
+        # Point on the line of sight closest to the planet
+        closest_point_on_los = np.array(observer_pos) + proj_length * line_of_sight_unit
+        
+        # Perpendicular distance from planet to line of sight
+        perpendicular_dist = np.linalg.norm(np.array(planet_pos) - closest_point_on_los)
+        
+        # Normalize by an "Einstein radius" proxy for visualization
+        # The Einstein radius (theta_E) depends on masses and distances.
+        # Here, let's use a constant related to the orbital radius for normalization.
+        einstein_radius_proxy = R_ORBIT * 0.1 # Example proxy, adjust for visual effect
+
+        u = perpendicular_dist / einstein_radius_proxy
+        
+        # Micro-lensing magnification formula (point-source point-lens)
+        if u <= 0.001: # Avoid division by zero and handle very close alignment
+            magnification = 1.0 + planet_mass_ratio * 1000 # Max magnification for very close alignment
+        else:
+            magnification = (u**2 + 2) / (u * np.sqrt(u**2 + 4))
+            # Scale by planet mass ratio to make it more pronounced for larger planets
+            magnification = 1.0 + (magnification - 1.0) * (planet_mass_ratio / 0.01) # Normalize to 0.01 mass ratio for scaling
+
+    return max(1.0, magnification) # 광도는 1.0 미만이 될 수 없음
 
 # --- 데이터 준비 ---
 frames_data = []
 lightcurve_values = []
 times = np.arange(orbital_period)
 
+# 관찰자 위치 계산 (고정)
+observer_angle_rad = np.radians(observer_angle_deg)
+observer_x = R_OBSERVER_DIST * np.cos(observer_angle_rad)
+observer_y = R_OBSERVER_DIST * np.sin(observer_angle_rad)
+observer_pos = (observer_x, observer_y)
+star_pos = (0, 0) # 중심별은 항상 (0,0)에 고정
+
 for t in times:
+    # 행성 위치 계산 (원형 궤도)
     angle = 2 * np.pi * t / orbital_period
     planet_x = R_ORBIT * np.cos(angle)
     planet_y = R_ORBIT * np.sin(angle)
 
-    observer_angle_rad = np.radians(observer_angle_deg)
-    
     # 광도 계산
     current_magnification = calculate_magnification(
-        (planet_x, planet_y), (0, 0), observer_angle_rad, planet_mass_ratio
+        (planet_x, planet_y), observer_pos, star_pos, planet_mass_ratio
     )
     lightcurve_values.append(current_magnification)
 
     # 각 프레임에 대한 데이터 저장
     frames_data.append({
         'data': [
+            # Trace 0: 중심별 (고정) - 데이터 변경 없음
+            go.Scatter(x=[star_pos[0]], y=[star_pos[1]], mode='markers', marker=dict(size=20, color='gold')),
+            # Trace 1: 행성 (움직임)
             go.Scatter(x=[planet_x], y=[planet_y], mode='markers', marker=dict(size=8, color='blue')),
+            # Trace 2: 광도 그래프 (업데이트)
             go.Scatter(x=times[:t+1], y=lightcurve_values[:t+1], mode='lines', line=dict(color='green'))
         ],
         'name': f'frame_{t}'
     })
 
 # --- 초기 그래프 생성 ---
-# 서브플롯 생성: 왼쪽은 공전 애니메이션, 오른쪽은 광도 변화 그래프
 fig = make_subplots(rows=1, cols=2,
                     subplot_titles=("행성 공전 시뮬레이션", "미세중력렌즈 광도 변화"),
                     specs=[[{'type': 'xy'}, {'type': 'xy'}]])
 
 # 1. 공전 시뮬레이션 서브플롯 (왼쪽)
-fig.add_trace(go.Scatter(x=[0], y=[0], mode='markers',
+# Trace 0: 중심별 (고정) - 이 인덱스가 중요합니다.
+fig.add_trace(go.Scatter(x=[star_pos[0]], y=[star_pos[1]], mode='markers',
                          marker=dict(size=20, color='gold'),
                          name='중심별'), row=1, col=1)
+# Trace 1: 행성 (초기 위치)
 fig.add_trace(go.Scatter(x=[R_ORBIT * np.cos(0)], y=[R_ORBIT * np.sin(0)], mode='markers',
                          marker=dict(size=8, color='blue'),
                          name='행성'), row=1, col=1)
 
-# 관찰자 시선 추가 (고정된 선)
-observer_x_end = R_ORBIT * 6 * np.cos(observer_angle_rad)
-observer_y_end = R_ORBIT * 6 * np.sin(observer_angle_rad)
-fig.add_trace(go.Scatter(x=[-observer_x_end, observer_x_end], y=[-observer_y_end, observer_y_end],
+# 관찰자 위치와 시선 추가 (고정된 선)
+fig.add_trace(go.Scatter(x=[observer_x], y=[observer_y], mode='markers',
+                         marker=dict(size=10, color='purple', symbol='star'),
+                         name='관찰자'), row=1, col=1) # 관찰자 위치
+fig.add_trace(go.Scatter(x=[observer_x, star_pos[0]], y=[observer_y, star_pos[1]],
                          mode='lines', line=dict(color='red', dash='dash'),
-                         name='관찰자 시선'), row=1, col=1)
+                         name='관찰자 시선'), row=1, col=1) # 관찰자 시선
 
 fig.update_xaxes(range=[-R_ORBIT * 1.2, R_ORBIT * 1.2], row=1, col=1)
-fig.update_yaxes(range=[-R_ORBIT * 1.2, R_ORBIT * 1.2], scaleanchor="x", scaleratio=1, row=1, col=1) # 비율 고정
+fig.update_yaxes(range=[-R_ORBIT * 1.2, R_ORBIT * 1.2], scaleanchor="x", scaleratio=1, row=1, col=1)
+fig.update_layout(showlegend=True, legend=dict(x=0.01, y=0.99)) # 범례 추가 및 위치 조정
 
 # 2. 광도 변화 서브플롯 (오른쪽)
+# Trace 2: 광도 그래프 (초기 데이터)
 fig.add_trace(go.Scatter(x=[0], y=[lightcurve_values[0]], mode='lines',
                          line=dict(color='green'),
                          name='광도'), row=1, col=2)
 
-fig.update_xaxes(range=[0, orbital_period], title_text="시간", row=1, col=2)
+fig.update_xaxes(range=[0, orbital_period], title_text="시간 (프레임)", row=1, col=2)
+# 광도 Y축 범위 조정: 초기값부터 최대 예상값까지
 fig.update_yaxes(range=[min(0.9, min(lightcurve_values) - 0.05), max(1.5, max(lightcurve_values) + 0.05)],
                  title_text="상대 광도", row=1, col=2)
 
 # --- 애니메이션 설정 ---
+# frames 리스트에 프레임 데이터 추가
 fig.frames = [go.Frame(data=frame['data'], name=frame['name']) for frame in frames_data]
 
 # 애니메이션 재생/일시정지 버튼 설정
@@ -168,11 +188,13 @@ fig.update_layout(
         dict(
             type="buttons",
             showactive=False,
+            x=0.01, # 버튼 위치 조정
+            y=1.05,
             buttons=[
-                dict(label="Play",
+                dict(label="▶ Play",
                      method="animate",
                      args=[None, {"frame": {"duration": 50, "redraw": True}, "fromcurrent": True}]),
-                dict(label="Pause",
+                dict(label="⏸ Pause",
                      method="animate",
                      args=[[None], {"frame": {"duration": 0, "redraw": False}, "mode": "immediate", "transition": {"duration": 0}}])
             ]
@@ -180,7 +202,7 @@ fig.update_layout(
     ]
 )
 
-# 슬라이더 설정 (선택 사항: 타임라인 슬라이더)
+# 타임라인 슬라이더 설정
 sliders = [
     dict(
         steps=[
@@ -196,14 +218,19 @@ sliders = [
         transition={"duration": 0},
         x=0.08,
         y=0,
-        currentvalue={"font": {"size": 12}, "prefix": "Frame: ", "visible": True},
+        currentvalue={"font": {"size": 12}, "prefix": "프레임: ", "visible": True},
         len=0.92,
     )
 ]
 fig.update_layout(sliders=sliders)
 
-
 # --- Streamlit 앱에 Plotly 그래프 표시 ---
 st.plotly_chart(fig, use_container_width=True)
 
-st.info("💡 **참고:** Plotly 애니메이션은 웹 기반이므로 훨씬 부드럽게 재생됩니다. 'Play' 버튼을 클릭하여 애니메이션을 시작하세요. 미세중력렌즈의 광도 계산 로직은 이 예시에서 단순화되어 있으며, 실제 물리 공식을 적용하여 더 정확하게 만들 수 있습니다.")
+st.markdown("---")
+st.subheader("시뮬레이션 설명:")
+st.markdown("""
+- **왼쪽 그래프**: 항성(노란색) 주위를 공전하는 행성(파란색)을 보여줍니다. 보라색 별은 관찰자의 위치이며, 붉은 점선은 관찰자로부터 항성으로 향하는 시선 방향을 나타냅니다.
+- **오른쪽 그래프**: 시간에 따른 항성의 상대 광도 변화를 나타냅니다. 행성이 관찰자와 항성 사이를 지나가면서 미세중력렌즈 효과에 의해 항성의 광도가 일시적으로 증가하는 것을 시뮬레이션합니다.
+- **광도 계산**: 현재 `calculate_magnification` 함수는 미세중력렌즈의 기본 원리(정렬 시 증폭)를 *매우 단순하게 근사*하여 구현되었습니다. 실제 천체 물리에서는 더 복잡한 공식과 파라미터(예: 아인슈타인 반경, 렌즈 및 광원의 질량, 거리 등)를 사용하여 광도를 계산합니다.
+""")
